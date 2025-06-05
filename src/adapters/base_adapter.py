@@ -1,11 +1,13 @@
 from abc import ABC, abstractmethod
-from typing import List
 
 class BaseAdapter(ABC):
-  @abstractmethod
-  def fetch_records(self) -> List[dict]:
-    pass
+    def __init__(self, executor):
+        self.executor = executor
 
-  @abstractmethod
-  def post_process(self, records: List[dict]):
-    pass
+    @abstractmethod
+    def fetch_records(self, query=None):
+        pass
+
+    @abstractmethod
+    def post_process(self, records, *args, **kwargs):
+        pass
