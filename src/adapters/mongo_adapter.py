@@ -1,20 +1,33 @@
-from pymongo import MongoClient
-from bson import ObjectId
-from typing import List
+# src/adapters/mongo_adapter.py
+
+from pymongo import MongoClient, ReturnDocument
 from src.adapters.base_adapter import BaseAdapter
+import logging
+
+logger = logging.getLogger(__name__)
 
 class MongoAdapter(BaseAdapter):
-  def __init__(self, uri: str, database: str, collection: str):
-    self.client = MongoClient(uri)
-    self.db = self.client[database]
-    self.collection = self.db[collection]
+    def __init__(self, executor, uri, database, collection):
+        super().__init__(executor)
+        self.client = MongoClient(uri)
+        self.collection = self.client[database][collection]
 
-  def fetch_records(self) -> List[dict]:
-    records = list(self.collection.find({"state": "AVAILABLE"}).limit(100))
-    for record in records:
-      record["_id"] = str(record["_id"])
-    return records
+    def fetch_records(self, query=None):
+        final_query = query or {"status": {"$ne": "TRANSFORMED"}}
+        return list(self.collection.find(final_query))
 
-  def post_process(self, records: List[dict]):
-    ids = [ObjectId(record["_id"]) for record in records]
-    self.collection.update_many({"_id": {"$in": ids}}, {"$set": {"state": "TRANSFORMED"}})
+    def post_process(self, records, *args, **kwargs):
+        ids = [r["_id"] for r in records]
+        result = self.collection.update_many(
+            {"_id": {"$in": ids}},
+            {"$set": {"status": "TRANSFORMED"}}
+        )
+        logger.info(f"Updated {result.modified_count} MongoDB records")
+
+    def mark_failed(self, records):
+        ids = [r["_id"] for r in records]
+        result = self.collection.update_many(
+            {"_id": {"$in": ids}},
+            {"$set": {"status": "FAILED"}}
+        )
+        logger.info(f"Marked {result.modified_count} records as FAILED")
